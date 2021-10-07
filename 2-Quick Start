@@ -1,0 +1,13 @@
+Source server:
+  1. install rsync and inotify-tools
+  2. adjust inotify kernel parameters
+  3. write trigger synchronization script
+  4. create the systemd service
+
+
+Target server:
+  1. install rsync 
+  2. edit /etc/rsyncd.conf
+  3. create the systemd service for rsync
+
+Test

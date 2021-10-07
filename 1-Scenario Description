@@ -1,0 +1,18 @@
+Simple scenario description:
+
+Server 1 is source server, on which there are directories /opt/test1/ and /opt/test2/, we hope to synchronize some files to target server 2. As long as files on server 1 are updated, the files on server 2 can be updated synchronizitionly.
+
+
+Preparation:
+
+Source server:
+  mkdir -p /opt/{test1,test2}
+  touch /opt/test1/{a1.txt,a2.txt}
+  touch /opt/test2/{b1.txt,b2.txt}
+
+Target server:
+  mkdir -p /tmp/{test1,test2}
+
+
+Purpose:
+Synchronize /opt/test1 and /opt/test2 of source to /tmp/test1 and /tmp/test2 of target.

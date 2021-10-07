@@ -1,0 +1,1 @@
+Change /opt/test1 or /opt/test2, for example add file, modify file etc, then check /tmp/test1 and /tmp/test2 on targer server.

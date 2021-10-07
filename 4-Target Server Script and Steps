@@ -1,0 +1,79 @@
+
+target server:
+  os:           centos 8.3
+  ip:           192.168.0.15
+  hostname:     target-server
+  software:     rsync
+
+
+
+
+Install rsync:
+
+yum install -y rsync
+Last metadata expiration check: 11:32:26 ago on Wed 06 Oct 2021 12:53:41 PM AEDT.
+Package rsync-3.1.3-12.el8.x86_64 is already installed.
+Dependencies resolved.
+Nothing to do.
+Complete!
+
+
+
+vi /etc/rsyncd.conf
+
+uid = root
+gid = root
+use chroot = no
+max connections = 10
+strict modes = yes
+pid file=/run/rsyncd.pid
+lock file=/run/rsyncd.lock
+
+[test1]
+path= /tmp/test1
+comment= analyse
+read only = false
+hosts allow = *
+
+[test2]
+path= /tmp/test2
+comment= analyse
+read only = false
+hosts allow = *
+
+
+
+vi /usr/lib/systemd/system/rsyncdaemon.service
+
+
+
+
+
+
+
+[Unit]
+Description=rsync daemon
+After=network.target
+
+[Service]
+PIDFile = /run/rsyncd.pid
+User=root
+Group=root
+WorkingDirectory = /run
+PermissionsStartOnly=true
+ExecStart= /usr/bin/rsync --daemon
+ExecReload = /bin/kill -HUP $MAINPID
+ExecStop = /bin/kill -WINCH ${MAINPID}
+KillSignal=SIGTERM
+PrivateTmp = true
+
+[Install]
+WantedBy=multi-user.target
+
+
+systemctl daemon-reload
+systemctl start rsyncdaemon
+systemctl status rsyncdaemon
+systemctl enable rsyncdaemon
+
+

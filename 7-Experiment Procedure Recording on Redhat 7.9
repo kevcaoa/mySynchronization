@@ -1,0 +1,367 @@
+Environment:
+
+Source server:
+  os:           rhel 7.9
+  ip:           192.168.111.16
+  hostname:     k8s-supp-svr-1
+
+
+Target server:
+  os:           rhel 7.9
+  ip:           192.168.111.17
+  hostname:     k8s-supp-svr-2
+
+
+
+
+
+Preparation:
+
+On source server:
+
+Command>>>>
+  mkdir -p /opt/{test1,test2}
+  touch /opt/test1/{a1.txt,a2.txt}
+  touch /opt/test2/{b1.txt,b2.txt} 
+
+Output>>>>
+[root@k8s-supp-svr-1 ~]# mkdir -p /opt/{test1,test2}
+[root@k8s-supp-svr-1 ~]# touch /opt/test1/{a1.txt,a2.txt}
+[root@k8s-supp-svr-1 ~]# touch /opt/test2/{b1.txt,b2.txt}
+
+
+On Target server:
+
+Command:>>>>
+  mkdir -p /tmp/{test1,test2}
+
+Output>>>>
+[root@k8s-supp-svr-2 ~]# mkdir -p /tmp/{test1,test2}
+
+
+
+
+
+Installation and Configuration:
+
+On source server:
+
+Install rsync:
+
+Command>>>>
+  yum install rsync
+
+Output>>>>
+Loaded plugins: langpacks, product-id, search-disabled-repos, subscription-manager
+Package rsync-3.1.2-10.el7.x86_64 already installed and latest version
+Nothing to do
+
+Install inotify-tools:
+
+Command>>>>
+  wget https://download-ib01.fedoraproject.org/pub/epel/7/x86_64/Packages/i/inotify-tools-3.14-9.el7.x86_64.rpm
+
+Output>>>>
+[root@k8s-supp-svr-1 inotify-tools]# wget https://download-ib01.fedoraproject.org/pub/epel/7/x86_64/Packages/i/inotify-tools-3.14-9.el7.x86_64.rpm
+--2021-10-06 22:55:27--  https://download-ib01.fedoraproject.org/pub/epel/7/x86_64/Packages/i/inotify-tools-3.14-9.el7.x86_64.rpm
+Resolving download-ib01.fedoraproject.org (download-ib01.fedoraproject.org)... 152.19.134.145, 2610:28:3090:3001:dead:beef:cafe:fed6
+Connecting to download-ib01.fedoraproject.org (download-ib01.fedoraproject.org)|152.19.134.145|:443... connected.
+HTTP request sent, awaiting response... 200 OK
+Length: 51917 (51K) [application/x-rpm]
+Saving to: ‘inotify-tools-3.14-9.el7.x86_64.rpm’
+
+100%[===================================================================================================================================>] 51,917       110KB/s   in 0.5s   
+
+2021-10-06 22:55:29 (110 KB/s) - ‘inotify-tools-3.14-9.el7.x86_64.rpm’ saved [51917/51917]
+
+Command>>>>
+  yum install inotify-tools-3.14-9.el7.x86_64.rpm
+
+Output>>>>
+[root@k8s-supp-svr-1 inotify-tools]# yum install inotify-tools-3.14-9.el7.x86_64.rpm 
+Loaded plugins: langpacks, product-id, search-disabled-repos, subscription-manager
+Examining inotify-tools-3.14-9.el7.x86_64.rpm: inotify-tools-3.14-9.el7.x86_64
+Marking inotify-tools-3.14-9.el7.x86_64.rpm to be installed
+Resolving Dependencies
+--> Running transaction check
+---> Package inotify-tools.x86_64 0:3.14-9.el7 will be installed
+--> Finished Dependency Resolution
+
+Dependencies Resolved
+
+=============================================================================================================================================================================
+ Package                                Arch                            Version                              Repository                                                 Size
+=============================================================================================================================================================================
+Installing:
+ inotify-tools                          x86_64                          3.14-9.el7                           /inotify-tools-3.14-9.el7.x86_64                          111 k
+
+Transaction Summary
+=============================================================================================================================================================================
+Install  1 Package
+
+Total size: 111 k
+Installed size: 111 k
+Is this ok [y/d/N]: y
+Downloading packages:
+Running transaction check
+Running transaction test
+Transaction test succeeded
+Running transaction
+  Installing : inotify-tools-3.14-9.el7.x86_64                                                                                                                           1/1 
+  Verifying  : inotify-tools-3.14-9.el7.x86_64                                                                                                                           1/1 
+
+Installed:
+  inotify-tools.x86_64 0:3.14-9.el7                                                                                                                                          
+
+Complete!
+
+
+Adjust inotify kernel parameters:
+
+Command>>>>
+  vi /etc/sysctl.conf
+
+fs.inotify.max_queued_events = 16384
+fs.inotify.max_user_instances = 1024
+fs.inotify.max_user_watches = 1048576
+
+Command>>>>
+  sysctl -p
+
+Output>>>>
+[root@k8s-supp-svr-1 inotify-tools]# sysctl -p
+net.ipv6.conf.all.disable_ipv6 = 1
+net.ipv6.conf.default.disable_ipv6 = 1
+fs.inotify.max_queued_events = 16384
+fs.inotify.max_user_instances = 1024
+fs.inotify.max_user_watches = 1048576
+
+Create password file:
+
+Command>>>>
+  vi /root/.root.pass
+
+a1b2d3f4
+
+Change permission of password file:
+
+Command>>>>
+  chmod 600 /root/.root.pass
+
+Output>>>>
+[root@k8s-supp-svr-1 inotify-tools]# chmod 600 /root/.root.pass
+
+
+Write trigger synchronization script:
+
+Command>>>>
+  mkdir -p /opt/autoSync
+
+Output>>>>
+[root@k8s-supp-svr-1 inotify-tools]# mkdir -p /opt/autoSync
+
+Command>>>>
+  vi /opt/autoSync/syncFiles.sh
+
+#!/bin/bash
+
+SOURCE1=/opt/test1
+SOURCE2=/opt/test2
+
+A="inotifywait -mrq -e modify,move,create,delete $SOURCE1 $SOURCE2"
+
+B1="rsync -azH --password-file=/root/.root.pass $SOURCE1/* root@192.168.111.17::test1"
+B2="rsync -azH --password-file=/root/.root.pass $SOURCE2/* root@192.168.111.17::test2"
+
+$A | while read DIRECTORY EVENT FILE
+do
+        if
+                [ $(pgrep rsync | wc -l) -le 0 ]
+        then
+                $B1;$B2
+        fi
+done
+
+
+Command>>>>
+  chmod 755 /opt/autoSync/syncFiles.sh
+
+Output>>>>
+[root@k8s-supp-svr-1 inotify-tools]# chmod 755 /opt/autoSync/syncFiles.sh
+
+
+Create the systemd service:
+
+Command>>>>
+  vi /usr/lib/systemd/system/autosyncd.service
+
+[Unit]
+Description=auto-sync Service
+After=network.target
+After=syslog.target
+
+[Service]
+User = root
+Group = root
+WorkingDirectory = /opt/autoSync
+ExecStartPre = /bin/mkdir /run/autosync
+ExecStartPre = /bin/chown -R root:root /run/autosync
+ExecStart = /bin/bash /opt/autoSync/syncFiles.sh
+ExecReload = /bin/kill -HUP $MAINPID
+ExecStop = /bin/kill -WINCH ${MAINPID}
+ExecStopPost = /bin/rm -rf /run/autosync
+KillSignal=SIGTERM
+PrivateTmp = true
+
+[Install]
+WantedBy = multi-user.target
+
+
+Command>>>>
+  systemctl daemon-reload
+  systemctl enable autosyncd
+  systemctl start autosyncd
+  systemctl status autosyncd
+
+
+Output>>>>
+[root@k8s-supp-svr-1 opt]# systemctl enable autosyncd
+Created symlink from /etc/systemd/system/multi-user.target.wants/autosyncd.service to /usr/lib/systemd/system/autosyncd.service.
+
+[root@k8s-supp-svr-1 opt]# systemctl start autosyncd
+[root@k8s-supp-svr-1 opt]# systemctl status autosyncd
+● autosyncd.service - auto-sync Service
+   Loaded: loaded (/usr/lib/systemd/system/autosyncd.service; enabled; vendor preset: disabled)
+   Active: active (running) since Thu 2021-10-07 00:28:00 AEDT; 1s ago
+[Unit]
+  Process: 6882 ExecStopPost=/bin/rm -rf /run/autosync (code=exited, status=0/SUCCESS)
+  Process: 6879 ExecStop=/bin/kill -WINCH ${MAINPID} (code=exited, status=0/SUCCESS)
+  Process: 6896 ExecStartPre=/bin/chown -R root:root /run/autosync (code=exited, status=0/SUCCESS)
+  Process: 6894 ExecStartPre=/bin/mkdir /run/autosync (code=exited, status=0/SUCCESS)
+ Main PID: 6898 (bash)
+    Tasks: 3
+   CGroup: /system.slice/autosyncd.service
+           ├─6898 /bin/bash /opt/autoSync/syncFiles.sh
+           ├─6901 inotifywait -mrq -e modify,move,create,delete /opt/test1 /opt/test2
+           └─6902 /bin/bash /opt/autoSync/syncFiles.sh
+
+Oct 07 00:28:00 k8s-supp-svr-1.myk8s systemd[1]: Starting auto-sync Service...
+Oct 07 00:28:00 k8s-supp-svr-1.myk8s systemd[1]: Started auto-sync Service.
+
+
+
+
+
+
+
+On target server:
+
+Install rsync:
+
+Command>>>>
+  yum install rsync
+
+Output>>>>
+[root@k8s-supp-svr-2 ~]# yum install rsync
+Loaded plugins: langpacks, product-id, search-disabled-repos, subscription-manager
+nginx                                                                                                                                               | 2.9 kB  00:00:00     
+rhel-7-server-extras-rpms                                                                                                                           | 3.4 kB  00:00:00     
+rhel-7-server-optional-rpms                                                                                                                         | 3.2 kB  00:00:00     
+rhel-7-server-rpms                                                                                                                                  | 3.5 kB  00:00:00     
+rhel-server-rhscl-7-rpms                                                                                                                            | 3.4 kB  00:00:00     
+(1/2): rhel-7-server-extras-rpms/x86_64/updateinfo                                                                                                  | 246 kB  00:00:00     
+(2/2): rhel-7-server-extras-rpms/x86_64/primary_db                                                                                                  | 680 kB  00:00:00     
+Package rsync-3.1.2-10.el7.x86_64 already installed and latest version
+Nothing to do
+
+
+Edit edit /etc/rsyncd.conf:
+
+Command>>>>
+  vi /etc/rsyncd.conf
+
+uid = root
+gid = root
+use chroot = no
+max connections = 10
+strict modes = yes
+pid file=/run/rsyncd.pid
+lock file=/run/rsyncd.lock
+
+[test1]
+path= /tmp/test1
+comment= analyse
+read only = false
+hosts allow = *
+
+[test2]
+path= /tmp/test2
+comment= analyse
+read only = false
+hosts allow = *
+
+Command>>>>
+  systemctl daemon-reload
+  systemctl enable rsyncd
+  systemctl start rsyncd
+  systemctl status rsyncd
+
+Output>>>>
+[root@k8s-supp-svr-2 ~]# systemctl enable rsyncd
+Created symlink from /etc/systemd/system/multi-user.target.wants/rsyncd.service to /usr/lib/systemd/system/rsyncd.service.
+
+[root@k8s-supp-svr-2 ~]# systemctl start rsyncd
+[root@k8s-supp-svr-2 ~]# systemctl status rsyncd
+● rsyncd.service - fast remote file copy program daemon
+   Loaded: loaded (/usr/lib/systemd/system/rsyncd.service; enabled; vendor preset: disabled)
+   Active: active (running) since Thu 2021-10-07 00:39:58 AEDT; 2s ago
+ Main PID: 5292 (rsync)
+    Tasks: 1
+   CGroup: /system.slice/rsyncd.service
+           └─5292 /usr/bin/rsync --daemon --no-detach
+
+Oct 07 00:39:58 k8s-supp-svr-2.myk8s systemd[1]: Started fast remote file copy program daemon.
+Oct 07 00:39:58 k8s-supp-svr-2.myk8s rsyncd[5292]: rsyncd version 3.1.2 starting, listening on port 873
+
+
+
+Test:
+
+On source server:
+
+change a1.txt/a2.txt etc, then check target server /tmp/test1 and /tmp/test2
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

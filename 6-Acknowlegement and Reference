@@ -1,0 +1,3 @@
+Reference:
+1) Configure inotify+rsync real-time synchronization - https://programmer.ink/think/configure-inotify-rsync-real-time-synchronization.html
+2) Sync folders and files on Linux with rsync and inotify  - https://bartsimons.me/sync-folders-and-files-on-linux-with-rsync-and-inotify/
